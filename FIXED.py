@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -73,6 +72,30 @@ if uploaded_file:
     df['hour'] = df['date'].dt.hour
     df['day'] = df['date'].dt.date
 
+    # محاسبه دقیق TTFT
+    df = df.reset_index(drop=True)
+    sla_list = []
+    for idx, row in df.iterrows():
+        current_user = row['user']
+        current_time = row['date']
+        current_account = row['account']
+        if pd.isna(row['responded_from']) or row['responded_from'] == current_user:
+            next_response = df[
+                (df['account'] == current_account) &
+                (df['date'] > current_time) &
+                (df['responded_from'].notna()) &
+                (df['responded_from'] != current_user)
+            ]
+            if not next_response.empty:
+                response_time = next_response.iloc[0]['date']
+                sla_minutes = (response_time - current_time).total_seconds() / 60
+                sla_list.append(sla_minutes)
+            else:
+                sla_list.append(None)
+        else:
+            sla_list.append(None)
+    df['sla'] = sla_list
+
     min_date = df['date'].min().date()
     max_date = df['date'].max().date()
     start_date, end_date = st.date_input("بازه تاریخ", [min_date, max_date], min_value=min_date, max_value=max_date)
@@ -84,7 +107,6 @@ if uploaded_file:
     col2.metric("تعداد اکانت‌ها", df['account'].nunique())
     col3.metric("کاربران یکتا", df['user'].nunique())
 
-    
     st.subheader("خلاصه وضعیت TTFT")
     if 'sla' in df.columns:
         max_sla_row = df.dropna(subset=['sla']).sort_values('sla', ascending=False).iloc[0]
@@ -115,33 +137,6 @@ if uploaded_file:
 
     st.divider()
     st.subheader("تحلیل TTFT (زمان پاسخ)")
-
-    # محاسبه SLA
-    df['next_date'] = df['date'].shift(-1)
-    df['next_user'] = df['user'].shift(-1)
-    df['sla'] = (df['next_date'] - df['date']).dt.total_seconds() / 60
-    df.loc[df['user'] != df['next_user'], 'sla'] = None
-
-    
-    # محاسبه SLA
-    df['next_date'] = df['date'].shift(-1)
-    df['next_user'] = df['user'].shift(-1)
-    df['sla'] = (df['next_date'] - df['date']).dt.total_seconds() / 60
-    df.loc[df['user'] != df['next_user'], 'sla'] = None
-
-    # جدول خلاصه SLA
-    st.subheader("خلاصه وضعیت TTFT")
-    if 'sla' in df.columns:
-        max_sla_row = df.dropna(subset=['sla']).sort_values('sla', ascending=False).iloc[0]
-        max_sla_account = max_sla_row['account']
-        max_sla_value = round(max_sla_row['sla'], 1)
-        avg_sla = round(df['sla'].mean(), 1)
-        delayed_over_60 = df[df['sla'] > 60].shape[0]
-
-        col_a, col_b, col_c = st.columns(3)
-        col_a.metric("بیشترین TTFT مربوط به", max_sla_account, f"{max_sla_value} دقیقه")
-        col_b.metric("میانگین TTFT", f"{avg_sla} دقیقه")
-        col_c.metric("تعداد پیام با تأخیر بیش از ۱ ساعت", delayed_over_60)
 
     st.subheader("TTFT ساعتی - کل")
     hourly_sla = df.dropna(subset=['sla']).groupby(df['date'].dt.hour)['sla'].mean().reindex(range(24), fill_value=0)
