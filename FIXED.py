@@ -47,6 +47,11 @@ def show_sla_distribution_table(df):
     st.subheader("درصد پاسخ‌گویی کارشناسان در بازه‌های زمانی مختلف SLA (به ازای اکانت)")
     selected_account = st.selectbox("انتخاب اکانت برای مشاهده توزیع SLA", df['account'].dropna().unique())
     df_filtered = df[df['account'] == selected_account].dropna(subset=['sla', 'responded_from'])
+    
+    if df_filtered.empty:
+        st.info("هیچ داده‌ای با پاسخ و SLA معتبر برای این اکانت وجود ندارد.")
+        return
+    
     df_filtered['SLA Range'] = df_filtered['sla'].apply(classify_sla)
     dist = pd.crosstab(index=df_filtered['SLA Range'],
                        columns=df_filtered['responded_from'],
@@ -66,6 +71,9 @@ if uploaded_file:
         'Responder': 'responded_from',
         'Tag': 'tag'
     })
+
+    admin_usernames = ["mahsa.gholamian", "admin123", "support", "Kazemi", "Soltani", "admin"]
+    df['responded_from'] = df['responded_from'].fillna(df['user'].where(df['user'].isin(admin_usernames)))
 
     df['date'] = pd.to_datetime(df['date'], errors='coerce')
     df = df.sort_values('date')
@@ -148,18 +156,22 @@ if uploaded_file:
     hourly_sla_acc = df_selected_acc.dropna(subset=['sla']).groupby(df_selected_acc['date'].dt.hour)['sla'].mean().reindex(range(24), fill_value=0)
     st.line_chart(hourly_sla_acc)
 
-    st.subheader("میانگین TTFT به ازای اکانت و ادمین ")
-    sla_summary = df.dropna(subset=['sla']).groupby(['responded_from', 'account'])['sla'].mean().reset_index()
-    styled_sla = sla_summary.rename(columns={
-        "responded_from": "ادمین",
-        "account": "اکانت",
-        "sla": "میانگین TTFT (دقیقه)"
-    })
-    styled_sla_display = styled_sla.style.applymap(
-        lambda x: 'background-color: #fdd' if isinstance(x, float) and x > 10 else '',
-        subset=["میانگین TTFT (دقیقه)"]
-    )
-    st.dataframe(styled_sla_display)
+    st.subheader("میانگین TTFT به ازای اکانت و ادمین")
+    filtered_df = df.dropna(subset=['sla', 'responded_from'])
+    if filtered_df.empty:
+        st.info("داده‌ای برای محاسبه میانگین TTFT وجود ندارد.")
+    else:
+        sla_summary = filtered_df.groupby(['responded_from', 'account'])['sla'].mean().reset_index()
+        styled_sla = sla_summary.rename(columns={
+            "responded_from": "ادمین",
+            "account": "اکانت",
+            "sla": "میانگین TTFT (دقیقه)"
+        })
+        styled_sla_display = styled_sla.style.applymap(
+            lambda x: 'background-color: #fdd' if isinstance(x, float) and x > 10 else '',
+            subset=["میانگین TTFT (دقیقه)"]
+        )
+        st.dataframe(styled_sla_display)
 
     show_sla_distribution_table(df)
 
@@ -170,7 +182,16 @@ if uploaded_file:
     st.subheader("تعداد پیام‌های شامل کلمه 'قیمت' به ازای هر اکانت")
     df_price = df[df['text'].astype(str).str.contains("قیمت", case=False, na=False)]
     price_table = df_price.groupby('account').size().reset_index(name='تعداد پیام‌های شامل قیمت')
+    price_table = price_table.sort_values('تعداد پیام‌های شامل قیمت', ascending=False)
+    total_price_msgs = df_price.shape[0]
+    st.metric(label="کل پیام‌ها شامل 'قیمت'", value=total_price_msgs)
     st.dataframe(price_table)
+
+    st.subheader("ترند پیام‌های ساعتی به ازای اکانت")
+    selected_account_trend = st.selectbox("انتخاب اکانت برای مشاهده ترند ساعتی پیام‌ها", df['account'].dropna().unique(), key="hourly_trend")
+    trend_df = df[df['account'] == selected_account_trend]
+    hourly_trend = trend_df.groupby(trend_df['date'].dt.hour).size().reindex(range(24), fill_value=0)
+    st.line_chart(hourly_trend)
 
 else:
     st.info("لطفاً فایل خروجی اکسل نوین‌هاب را بارگذاری کنید.")
