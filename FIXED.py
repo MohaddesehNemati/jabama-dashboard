@@ -215,28 +215,10 @@ if uploaded_file:
         st.metric(label=f"کل پیام‌ها شامل '{custom_keyword}'", value=custom_count)
         st.dataframe(custom_table)
 
-    st.subheader("نمودار ورودی روزانه به تفکیک اکانت (Stacked Bar)")
-
-    daily_account = df.groupby(['day', 'account']).size().unstack(fill_value=0)
-    daily_totals = daily_account.sum(axis=1)
-
-    fig, ax = plt.subplots(figsize=(10, 6))
-    daily_account.plot(kind='bar', stacked=True, ax=ax)
-
-    for idx, total in enumerate(daily_totals):
-        ax.text(idx, total + 1, str(int(total)), ha='center', va='bottom')
-
-    ax.set_ylabel("تعداد پیام‌ها")
-    ax.set_xlabel("تاریخ")
-    ax.set_title("ورودی روزانه به تفکیک اکانت")
-    st.pyplot(fig)
-
     st.subheader("۵ اکانت با بیشترین پیام و سهم آنها از کل")
-
     account_total = df['account'].value_counts().reset_index()
     account_total.columns = ['account', 'count']
     account_total['percent'] = (account_total['count'] / account_total['count'].sum() * 100).round(1)
-
     top5 = account_total.head(5)
     others_percent = 100 - top5['percent'].sum()
     st.dataframe(top5.rename(columns={'count': 'تعداد پیام', 'percent': 'درصد از کل'}))
