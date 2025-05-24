@@ -115,17 +115,6 @@ if uploaded_file:
     col2.metric("تعداد اکانت‌ها", df['account'].nunique())
     col3.metric("کاربران یکتا", df['user'].nunique())
 
-    # درصد تغییرات نسبت به روز قبل
-    yesterday = max_date - pd.Timedelta(days=1)
-    day_before = max_date - pd.Timedelta(days=2)
-    count_yesterday = df[df['day'] == yesterday].shape[0]
-    count_before = df[df['day'] == day_before].shape[0]
-    change = count_yesterday - count_before
-    pct_change = (change / count_before * 100) if count_before != 0 else 0
-    col4 = st.columns(4)[3]
-    change_symbol = "📈" if change > 0 else "📉" if change < 0 else "➖"
-    col4.metric("تغییر نسبت به دیروز", f"{change_symbol} {abs(change)} پیام", f"{pct_change:.1f}%", delta_color="normal")
-
     st.subheader("خلاصه وضعیت TTFT")
     if 'sla' in df.columns:
         max_sla_row = df.dropna(subset=['sla']).sort_values('sla', ascending=False).iloc[0]
