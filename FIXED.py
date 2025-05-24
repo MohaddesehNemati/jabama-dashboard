@@ -115,6 +115,17 @@ if uploaded_file:
     col2.metric("تعداد اکانت‌ها", df['account'].nunique())
     col3.metric("کاربران یکتا", df['user'].nunique())
 
+    # درصد تغییرات نسبت به روز قبل
+    yesterday = max_date - pd.Timedelta(days=1)
+    day_before = max_date - pd.Timedelta(days=2)
+    count_yesterday = df[df['day'] == yesterday].shape[0]
+    count_before = df[df['day'] == day_before].shape[0]
+    change = count_yesterday - count_before
+    pct_change = (change / count_before * 100) if count_before != 0 else 0
+    col4 = st.columns(4)[3]
+    change_symbol = "📈" if change > 0 else "📉" if change < 0 else "➖"
+    col4.metric("تغییر نسبت به دیروز", f"{change_symbol} {abs(change)} پیام", f"{pct_change:.1f}%", delta_color="normal")
+
     st.subheader("خلاصه وضعیت TTFT")
     if 'sla' in df.columns:
         max_sla_row = df.dropna(subset=['sla']).sort_values('sla', ascending=False).iloc[0]
@@ -186,6 +197,50 @@ if uploaded_file:
     total_price_msgs = df_price.shape[0]
     st.metric(label="کل پیام‌ها شامل 'قیمت'", value=total_price_msgs)
     st.dataframe(price_table)
+
+    st.subheader("تعداد پیام‌های شامل کلمه 'رزرو' به ازای هر اکانت")
+    df_rez = df[df['text'].astype(str).str.contains("رزرو", case=False, na=False)]
+    rez_table = df_rez.groupby('account').size().reset_index(name='تعداد پیام‌های شامل رزرو')
+    rez_table = rez_table.sort_values('تعداد پیام‌های شامل رزرو', ascending=False)
+    total_rez_msgs = df_rez.shape[0]
+    st.metric(label="کل پیام‌ها شامل 'رزرو'", value=total_rez_msgs)
+    st.dataframe(rez_table)
+
+    st.subheader("جستجوی سفارشی در پیام‌ها")
+    custom_keyword = st.text_input("کلمه موردنظر برای جستجو:")
+    if custom_keyword:
+        df_custom = df[df['text'].astype(str).str.contains(custom_keyword, case=False, na=False)]
+        custom_count = df_custom.shape[0]
+        custom_table = df_custom.groupby('account').size().reset_index(name=f"تعداد پیام شامل '{custom_keyword}'")
+        st.metric(label=f"کل پیام‌ها شامل '{custom_keyword}'", value=custom_count)
+        st.dataframe(custom_table)
+
+    st.subheader("نمودار ورودی روزانه به تفکیک اکانت (Stacked Bar)")
+
+    daily_account = df.groupby(['day', 'account']).size().unstack(fill_value=0)
+    daily_totals = daily_account.sum(axis=1)
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+    daily_account.plot(kind='bar', stacked=True, ax=ax)
+
+    for idx, total in enumerate(daily_totals):
+        ax.text(idx, total + 1, str(int(total)), ha='center', va='bottom')
+
+    ax.set_ylabel("تعداد پیام‌ها")
+    ax.set_xlabel("تاریخ")
+    ax.set_title("ورودی روزانه به تفکیک اکانت")
+    st.pyplot(fig)
+
+    st.subheader("۵ اکانت با بیشترین پیام و سهم آنها از کل")
+
+    account_total = df['account'].value_counts().reset_index()
+    account_total.columns = ['account', 'count']
+    account_total['percent'] = (account_total['count'] / account_total['count'].sum() * 100).round(1)
+
+    top5 = account_total.head(5)
+    others_percent = 100 - top5['percent'].sum()
+    st.dataframe(top5.rename(columns={'count': 'تعداد پیام', 'percent': 'درصد از کل'}))
+    st.markdown(f"🔸 مجموع سهم ۵ اکانت برتر: **{top5['percent'].sum():.1f}%**  | سایرین: **{others_percent:.1f}%**")
 
     st.subheader("ترند پیام‌های ساعتی به ازای اکانت")
     selected_account_trend = st.selectbox("انتخاب اکانت برای مشاهده ترند ساعتی پیام‌ها", df['account'].dropna().unique(), key="hourly_trend")
